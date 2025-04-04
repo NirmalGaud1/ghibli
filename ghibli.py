@@ -55,10 +55,7 @@ def cartoonize_image(img, palette_name):
     # 6. Final enhancements
     final = final.filter(ImageFilter.SMOOTH_MORE)
     return ImageEnhance.Sharpness(final).enhance(2.0).convert("RGBA")
-
-def add_whimsical_text(img, text):
-    # ... (keep previous text implementation) ...
-
+  
 def main():
     st.title("🎨 Studio Ghibli Style Converter")
     

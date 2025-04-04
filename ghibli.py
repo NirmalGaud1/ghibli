@@ -1,8 +1,9 @@
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance, ImageOps
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import textwrap
-import numpy as np
 
 # Studio Ghibli color palettes
 GHIBLI_PALETTES = {
@@ -18,63 +19,45 @@ GHIBLI_PALETTES = {
 }
 
 def apply_ghibli_colors(img, palette_name):
-    """Apply Ghibli color palette with proper mode handling"""
-    # Convert to RGB if needed
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-    
-    # Convert hex colors to RGB tuples
+    """Apply Ghibli color palette using optimized quantization"""
+    img = img.convert('RGB')
     palette = [tuple(int(c.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) 
               for c in GHIBLI_PALETTES[palette_name]]
     
-    # Create palette image
+    # Create palette image with 256 colors
     pal_image = Image.new("P", (16, 16))
-    pal_image.putpalette(sum(palette, ()) * 51)  # Fill 256-color palette
+    flattened = sum(palette, ())
+    repeat = 256 // len(palette)
+    remainder = 256 % len(palette)
+    extended = (flattened * repeat) + flattened[:3*remainder]
+    pal_image.putpalette(extended)
     
-    # Quantize and return as RGB
     return img.quantize(
-        colors=len(palette),
         method=Image.Quantize.FASTOCTREE,
         palette=pal_image
     ).convert('RGB')
 
-def cartoonize_image(img, palette_name):
-    """Create strong cartoon effect with mode-safe operations"""
-    # Ensure RGB mode
-    img = img.convert('RGB')
+def cartoonify(img):
+    """Create cartoon effect using OpenCV"""
+    img_cv = np.array(img)
+    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
     
-    # 1. Enhance contrast and colors
-    img = ImageEnhance.Contrast(img).enhance(1.8)
-    img = ImageEnhance.Color(img).enhance(2.2)
+    # Cartoonification pipeline
+    gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+    gray = cv2.medianBlur(gray, 5)
+    edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                cv2.THRESH_BINARY, 9, 9)
+    color = cv2.bilateralFilter(img_cv, 9, 300, 300)
+    cartoon_cv = cv2.bitwise_and(color, color, mask=edges)
     
-    # 2. Create strong edges
-    edges = img.filter(ImageFilter.FIND_EDGES)
-    edges = edges.filter(ImageFilter.SMOOTH_MORE)
-    edges = ImageOps.invert(edges.convert('L'))
-    
-    # 3. Apply Ghibli colors
-    colored = apply_ghibli_colors(img, palette_name)
-    
-    # 4. Combine elements
-    cartoon = Image.composite(colored, img, edges)
-    
-    # 5. Add painterly texture
-    np_img = np.array(cartoon).astype(float)
-    noise = np.random.normal(0, 25, np_img.shape)
-    cartoon = Image.fromarray(np.uint8(np.clip(np_img + noise, 0, 255)))
-    
-    return cartoon.convert('RGBA')
+    return Image.fromarray(cv2.cvtColor(cartoon_cv, cv2.COLOR_BGR2RGB))
 
-def add_whimsical_text(img, text):
-    """Add text overlay with proper mode handling"""
-    # Convert to RGBA if needed
-    if img.mode != 'RGBA':
-        img = img.convert('RGBA')
-    
-    draw = ImageDraw.Draw(img)
+def add_text_overlay(img, text):
+    """Add stylized text overlay"""
+    draw = ImageDraw.Draw(img.convert('RGBA'))
     width, height = img.size
     
-    # Font loading with fallbacks
+    # Font handling
     font_size = int(height * 0.06)
     font_paths = [
         "LuckiestGuy-Regular.ttf",
@@ -114,22 +97,20 @@ def add_whimsical_text(img, text):
     return img
 
 def main():
-    st.title("🎨 Studio Ghibli Art Converter")
+    st.title("🎨 Ghibli-Style Cartoonifier")
     
     uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
     palette_choice = st.selectbox("Color Palette", list(GHIBLI_PALETTES.keys()))
     text_input = st.text_area("Caption", "Where magic comes alive...")
     
     if uploaded_file and st.button("Create Art"):
-        with st.spinner("Painting your masterpiece..."):
+        with st.spinner("Creating magical artwork..."):
             try:
                 # Load and process image
                 img = Image.open(uploaded_file)
-                img = img.convert('RGB')  # Ensure initial RGB mode
-                
-                # Apply transformations
-                cartoon = cartoonize_image(img, palette_choice)
-                final_img = add_whimsical_text(cartoon, text_input)
+                cartoon = cartoonify(img)
+                colored = apply_ghibli_colors(cartoon, palette_choice)
+                final_img = add_text_overlay(colored, text_input)
                 
                 # Display results
                 col1, col2 = st.columns(2)

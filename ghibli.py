@@ -64,7 +64,7 @@ def add_ghibli_text(img, text):
     # Text background and styling
     draw.rectangle(
         (text_x-10, text_y-10, text_x + (bbox[2]-bbox[0])+10, text_y + (bbox[3]-bbox[1])+10),
-        fill=(0, 0, 0, 128)
+        fill=(0, 0, 0, 128))
     draw.text((text_x, text_y), wrapped_text, font=font, fill=(255, 255, 255, 255))
     
     return img

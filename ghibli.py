@@ -26,7 +26,7 @@ def apply_ghibli_colors(img, palette_name):
     
     # Create palette image
     pal_image = Image.new("P", (16, 16))
-    pal_image.putpalette(sum(palette, ())  # Flatten RGB tuples
+    pal_image.putpalette(sum(palette, ()))  # Flatten RGB tuples
     
     # Quantize image using selected palette
     return img.convert("RGB").quantize(

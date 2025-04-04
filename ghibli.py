@@ -18,7 +18,7 @@ def apply_ghibli_colors(img, palette_name):
     
     # Create optimized palette image
     pal_image = Image.new("P", (16, 16))
-    pal_image.putpalette(sum(palette, ()) * 3  # Extend for 256 colors
+    pal_image.putpalette(sum(palette, ()) * 3)  # Extend for 256 colors
     
     return img.convert("RGB").quantize(
         colors=len(palette),

@@ -1,6 +1,5 @@
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont
-import requests
 from io import BytesIO
 import textwrap
 
@@ -9,14 +8,18 @@ def generate_ghibli_style_image(image_bytes, text):
     try:
         img = Image.open(BytesIO(image_bytes)).convert("RGBA")
         width, height = img.size
+        font_size = int(height * 0.05)
 
+        # Try multiple fonts in priority order
         try:
-            font_size = int(height * 0.05)
-            font = ImageFont.truetype("arial.ttf", font_size)
+            font = ImageFont.truetype("arial.ttf", font_size)  # First choice
         except OSError:
-            font = ImageFont.load_default()
-            st.warning("Arial font not found, using default font.")
-
+            try:
+                font = ImageFont.truetype("DejaVuSans.ttf", font_size)  # Fallback
+            except OSError:
+                font = ImageFont.load_default()  # Last resort
+                st.warning("Custom fonts missing; using limited default font.")
+                
         draw = ImageDraw.Draw(img)
         avg_char_width = font.getlength("A")
         if avg_char_width == 0:

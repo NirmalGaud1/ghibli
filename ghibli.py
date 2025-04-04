@@ -11,18 +11,27 @@ def generate_ghibli_style_image(image_bytes, text):
         width, height = img.size
 
         try:
-            font = ImageFont.truetype("arial.ttf", int(height * 0.05))
+            font_size = int(height * 0.05)
+            font = ImageFont.truetype("arial.ttf", font_size)
         except OSError:
             font = ImageFont.load_default()
             st.warning("Arial font not found, using default font.")
 
         draw = ImageDraw.Draw(img)
-        wrapped_text = textwrap.fill(text, width=int(width / (font.getlength("A")) * 1.5))
+        avg_char_width = font.getlength("A")
+        if avg_char_width == 0:
+            avg_char_width = 1  # Prevent division by zero
+        textwrap_width = int(width / avg_char_width)
+        wrapped_text = textwrap.fill(text, width=textwrap_width)
 
-        text_width, text_height = draw.textsize(wrapped_text, font=font)
-        text_x = (width - text_width) / 2
+        # Calculate text dimensions using textbbox
+        bbox = draw.textbbox((0, 0), wrapped_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        text_x = (width - text_width) // 2
         text_y = height - text_height - int(height * 0.05)
 
+        # Draw background rectangle
         draw.rectangle(
             (text_x - 10, text_y - 10, text_x + text_width + 10, text_y + text_height + 10),
             fill=(0, 0, 0, 128),
@@ -48,9 +57,15 @@ if uploaded_file is not None:
 
         if generated_image:
             st.image(generated_image, caption="Generated Ghibli Style Image")
+            
+            # Save image to bytes buffer for download
+            img_buffer = BytesIO()
+            generated_image.save(img_buffer, format="PNG")
+            img_buffer.seek(0)
+            
             st.download_button(
                 label="Download Image",
-                data=generated_image.tobytes(),
+                data=img_buffer,
                 file_name="ghibli_style_image.png",
                 mime="image/png",
             )

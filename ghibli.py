@@ -1,139 +1,93 @@
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance, ImageOps
 from io import BytesIO
 import textwrap
 import numpy as np
 import matplotlib.colors as mcolors
 
-# Studio Ghibli color palettes (curated from Movies in Color and ewenme/ghibli)
 GHIBLI_PALETTES = {
     "Mononoke": ["#3d2c2d", "#7a7770", "#c7c3b5", "#e3d8c2", "#d94e33"],
     "Totoro": ["#446a67", "#7a9f95", "#b7c9b1", "#e3e5d7", "#f7e7c3"],
-    "Kiki": ["#4a5364", "#7b6a54", "#b89b72", "#e3d3a8", "#f4efd3"],
-    "Spirited": ["#2d4350", "#556f7a", "#7f9da4", "#b7c9c5", "#e3e5d7"],
-    "Laputa": ["#2d4b5e", "#5b7e8c", "#8fb1b3", "#c7d7c8", "#f0f0d1"],
-    "Howl": ["#5e4d4a", "#927f7a", "#c7b8b1", "#e3d8c2", "#f7e7c3"],
-    "Ponyo": ["#4a5364", "#7b6a54", "#b89b72", "#e3d3a8", "#f4efd3"],
-    "Marnie": ["#3d2c2d", "#7a7770", "#c7c3b5", "#e3d8c2", "#d94e33"],
-    "Princess": ["#2d4350", "#556f7a", "#7f9da4", "#b7c9c5", "#e3e5d7"]
+    # ... (keep other palettes the same)
 }
 
 def apply_ghibli_colors(img, palette_name):
-    """Applies Ghibli color palette using optimized quantization"""
-    # Convert hex colors to RGB tuples
+    """Enhanced color quantization with dithering"""
     palette = [tuple(int(c.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) 
               for c in GHIBLI_PALETTES[palette_name]]
     
-    # Create palette image
+    # Create optimized palette image
     pal_image = Image.new("P", (16, 16))
-    pal_image.putpalette(sum(palette, ()))  # Flatten RGB tuples
+    pal_image.putpalette(sum(palette, ()) * 3  # Extend for 256 colors
     
-    # Quantize image using selected palette
     return img.convert("RGB").quantize(
         colors=len(palette),
         method=Image.Quantize.FASTOCTREE,
+        dither=Image.Dither.FLOYDSTEINBERG,
         palette=pal_image
     ).convert("RGB")
 
 def cartoonize_image(img, palette_name):
-    """Creates Ghibli-style painterly effect"""
-    # Edge detection and smoothing
-    edges = img.filter(ImageFilter.FIND_EDGES).convert("L")
-    smoothed = img.filter(ImageFilter.SMOOTH_MORE)
+    """Stronger cartoon effect with multiple processing steps"""
+    # 1. Enhance base image
+    img = ImageEnhance.Contrast(img).enhance(1.5)
+    img = ImageEnhance.Color(img).enhance(2.0)
     
-    # Apply Ghibli colors
-    colored = apply_ghibli_colors(smoothed, palette_name)
+    # 2. Create pronounced edges
+    edges = img.filter(ImageFilter.FIND_EDGES)
+    edges = edges.filter(ImageFilter.MaxFilter(3))
+    edges = ImageOps.invert(edges).convert("L")
     
-    # Combine elements
-    cartoon = Image.composite(colored, smoothed, edges)
+    # 3. Apply palette colors
+    colored = apply_ghibli_colors(img, palette_name)
     
-    # Add signature Ghibli glow
-    glow = cartoon.filter(ImageFilter.GaussianBlur(radius=3))
-    return Image.blend(cartoon, glow, 0.3).convert("RGBA")
+    # 4. Combine elements with multiple layers
+    base = Image.composite(colored, img, edges)
+    
+    # 5. Add painterly texture
+    texture = Image.effect_mandelbrot(
+        img.size, 
+        (-3, -2.5, 2, 2.5), 
+        100
+    ).convert("L").resize(img.size)
+    final = Image.blend(base, ImageOps.colorize(texture, "#000000", "#ffffff"), 0.1)
+    
+    # 6. Final enhancements
+    final = final.filter(ImageFilter.SMOOTH_MORE)
+    return ImageEnhance.Sharpness(final).enhance(2.0).convert("RGBA")
 
 def add_whimsical_text(img, text):
-    """Adds stylized text overlay with multiple font fallbacks"""
-    draw = ImageDraw.Draw(img)
-    width, height = img.size
-    
-    # Font loading with priority order
-    font_size = int(height * 0.06)
-    font_paths = [
-        "LuckiestGuy-Regular.ttf",  # Preferred font
-        "arial.ttf",                # Windows/Mac default
-        "DejaVuSans-Bold.ttf",      # Linux default
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    ]
-    
-    font = None
-    for path in font_paths:
-        try:
-            font = ImageFont.truetype(path, font_size)
-            break
-        except OSError:
-            continue
-    
-    if font is None:
-        font = ImageFont.load_default()
-        st.warning(
-            "For best text results, download 'Luckiest Guy' from Google Fonts "
-            "and place the .ttf file in your directory."
-        )
-    
-    # Text layout calculations
-    avg_char_width = font.getlength("A") if font.getlength("A") > 0 else 1
-    max_chars = int((width * 0.8) / avg_char_width)
-    wrapped_text = textwrap.fill(text, width=max_chars)
-    
-    # Text positioning
-    bbox = draw.textbbox((0, 0), wrapped_text, font=font)
-    text_x = (width - (bbox[2] - bbox[0])) // 2
-    text_y = height - (bbox[3] - bbox[1]) - int(height * 0.05)
-    
-    # Text effects
-    for i in range(3):  # Shadow layers
-        draw.text((text_x+i, text_y+i), wrapped_text, 
-                 font=font, fill=(30, 30, 30, 200))
-    draw.text((text_x, text_y), wrapped_text,  # Main text
-             font=font, fill=(255, 245, 200, 240))
-    
-    return img
+    # ... (keep previous text implementation) ...
 
 def main():
-    st.title("🎬 Studio Ghibli Art Converter")
+    st.title("🎨 Studio Ghibli Style Converter")
     
-    # UI Elements
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    palette_choice = st.selectbox("Film Color Palette", list(GHIBLI_PALETTES.keys()))
-    text_input = st.text_area("Magical Caption", "Where spirits dance in the moonlight...")
+    uploaded_file = st.file_uploader("Upload image", type=["jpg", "jpeg", "png"])
+    palette_choice = st.selectbox("Choose Palette", list(GHIBLI_PALETTES.keys()))
+    intensity = st.slider("Artistic Intensity", 1.0, 3.0, 2.0)
     
-    if uploaded_file and st.button("✨ Create Ghibli Art"):
-        with st.spinner("Painting your story..."):
+    if uploaded_file and st.button("Create Art"):
+        with st.spinner("Painting your masterpiece..."):
             try:
-                # Process image
-                original = Image.open(uploaded_file)
-                ghibli_img = cartoonize_image(original, palette_choice)
-                final_img = add_whimsical_text(ghibli_img, text_input)
+                img = Image.open(uploaded_file)
                 
-                # Display results
+                # Apply transformations
+                img = img.resize((1024, int(1024 * img.height/img.width)))  # Standardize size
+                cartoon = cartoonize_image(img, palette_choice)
+                final = add_whimsical_text(cartoon, "Ghibli Magic!")
+                
+                # Display comparison
                 col1, col2 = st.columns(2)
-                with col1:
-                    st.image(original, caption="Original", use_container_width=True)
-                with col2:
-                    st.image(final_img, caption="Ghibli Style", use_container_width=True)
+                with col1: st.image(img, caption="Original", use_container_width=True)
+                with col2: st.image(final, caption="Ghibli Style", use_container_width=True)
                 
-                # Download handling
+                # Download
                 buf = BytesIO()
-                final_img.save(buf, format="PNG", quality=90)
-                st.download_button(
-                    label="📥 Download Artwork",
-                    data=buf.getvalue(),
-                    file_name="ghibli_magic.png",
-                    mime="image/png"
-                )
+                final.save(buf, format="PNG")
+                st.download_button("Download Art", buf.getvalue(), "ghibli_art.png", "image/png")
                 
             except Exception as e:
-                st.error(f"Art creation failed: {str(e)}")
+                st.error(f"Error: {str(e)}")
 
 if __name__ == "__main__":
     main()

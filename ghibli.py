@@ -52,7 +52,7 @@ def add_ghibli_text(img_array, text):
     # Add background and text
     draw.rectangle(
         (x-10, y-10, x+text_width+10, y+text_height+10),
-        fill=(0, 0, 0)
+        fill=(0, 0, 0))
     draw.text((x, y), text, font=font, fill=(255, 255, 255))
     
     return np.array(pil_img)
